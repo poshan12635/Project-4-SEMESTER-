@@ -1,110 +1,102 @@
+// Backtest.jsx
 import React, { useState, useEffect } from "react";
-import "./Backtest.css"; 
+import Chart from "./Chart";
+import "./Backtest.css";
 
 function Backtest() {
-  const [message, setmessage] = useState([{
-    ohlc:[],
-    strategy:[],
-    trades:[]
-  }]);
-  const [sym, setsymbol] = useState("");
-  const [symbollist, setlist] = useState([]);
-  const [stra, setstra] = useState("");
-  const [investement, setinve] = useState("");
+  const [message, setMessage] = useState({ summary: {}, ohlc: [], trades: [], indicators: {} });
+  const [sym, setSym] = useState("");
+  const [symbolList, setList] = useState([]);
+  const [strategy, setStrategy] = useState("");
+  const [investment, setInve] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const STRATEGIES = ["Mean Reversion", "Arima", "Sarima", "Moving Average Crossover", "Bollinger Band"];
-
   useEffect(() => {
-    getsymbol();
+    fetch("http://localhost:8000/hydroname").then(res => res.json()).then(data => setList(data));
   }, []);
 
-  const getdata = async () => {
-    if (!sym || !stra || !investement) {
-        alert("Please fill all fields");
-        return;
-    }
+  const runBacktest = async () => {
     setLoading(true);
     const res = await fetch("http://localhost:8000/bbband", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({investement:parseFloat(investement),sym: sym,stra: stra}),
+      body: JSON.stringify({ investement: parseFloat(investment), sym, stra: strategy }),
     });
     const data = await res.json();
-    setmessage({ohlc:data.ohlc,
-      strategy:data.bb,
-      trades:data.trades}
-
-    );
-  };
-
-  const getsymbol = async () => {
-    try {
-      const res = await fetch("http://localhost:8000/hydroname");
-      const data = await res.json();
-      setlist(data);
-    } catch (err) {
-      console.log("failed to fetch symbols");
-    }
+    setMessage(data);
+    setLoading(false);
   };
 
   return (
-    <div className="quant-container">
-      
-      <aside className="sidebar">
-        <div className="logo">QUANT<span>LAB</span></div>
-        
-        <div className="input-group">
-          <label>Stock Symbol</label>
-          <select value={sym} onChange={(e) => setsymbol(e.target.value)}>
-            <option value="">Select a Stock</option>
-            {symbollist.map((item, index) => (
-              <option key={index} value={item.Symbol}>{item.Symbol}</option>
-            ))}
+    <div className="backtest-dashboard">
+      <aside className="dashboard-sidebar">
+        <h3 className="sidebar-title">Strategy Config</h3>
+        <div className="control-group">
+          <label>Asset</label>
+          <select value={sym} onChange={(e) => setSym(e.target.value)}>
+            <option value="">Select Ticker</option>
+            {symbolList.map((item, i) => <option key={i} value={item.Symbol}>{item.Symbol}</option>)}
           </select>
         </div>
-
-        <div className="input-group">
-          <label>Strategy</label>
-          <select value={stra} onChange={(e) => setstra(e.target.value)}>
-            <option value="">Select Strategy</option>
-            {STRATEGIES.map((item, index) => (
-              <option key={index} value={item}>{item}</option>
-            ))}
+        <div className="control-group">
+          <label>Algorithm</label>
+          <select value={strategy} onChange={(e) => setStrategy(e.target.value)}>
+            <option value="">Choose Logic</option>
+            <option value="Bollinger Band">Bollinger Band</option>
+            <option value="Moving Average Crossover">MA Crossover</option>
+            <option value="Mean Reversion">Mean Reversion</option>
           </select>
         </div>
-
-        <div className="input-group">
-          <label>Investment Capital</label>
-          <input
-            type="number"
-            placeholder="e.g. 10000"
-            value={investement}
-            onChange={(e) => setinve(e.target.value)}
-          />
+        <div className="control-group">
+          <label>Capital</label>
+          <input type="number" value={investment} onChange={(e) => setInve(e.target.value)} placeholder="10000" />
         </div>
-
-        <button className="run-button" onClick={getdata}>
-          Run Backtest
+        <button className="run-btn" onClick={runBacktest} disabled={loading}>
+          {loading ? "PROCESSING..." : "RUN ANALYSIS"}
         </button>
       </aside>
 
-      {/* RIGHT MAIN CONTENT */}
-      <main className="main-content">
-        <header className="content-header">
-          <h2>Backtest Results {sym && `— ${sym}`}</h2>
-        </header>
-        
-        <div className="results-display">
-          {message.length === 0 ? (
-            <div className="placeholder">Configure parameters and run to see results.</div>
+      <main className="dashboard-main">
+        <div className="scroll-content">
+          {message.ohlc.length > 0 ? (
+            <>
+              <div className="metrics-row">
+                {Object.entries(message.summary).map(([key, val]) => (
+                  <div key={key} className="metric-box">
+                    <div className="metric-label">{key}</div>
+                    <div className="metric-value">{val}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="chart-container">
+                <Chart data={{
+        ohlc: message.ohlc,
+        indicators: message.indicators,
+        trades: message.trades // Pass the trades array here
+    }} />
+              </div>
+              <div className="table-container">
+                 <table>
+                    <thead><tr><th>Time</th><th>Type</th><th>Price</th><th>PnL</th></tr></thead>
+                    <tbody>
+                      {message.trades.map((t, i) => (
+                        <tr key={i}>
+                          <td>{t.EntryTime}</td>
+                          <td className={t.Size > 0 ? "buy" : "sell"}>{t.Size > 0 ? "LONG" : "SHORT"}</td>
+                          <td>{t.EntryPrice?.toFixed(2)}</td>
+                          <td className={t.PnL > 0 ? "buy" : "sell"}>{t.PnL?.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                 </table>
+              </div>
+            </>
           ) : (
-            <pre>{JSON.stringify(message, null, 2)}</pre>
+            <div className="empty-msg">Ready for strategy initialization.</div>
           )}
         </div>
       </main>
     </div>
   );
 }
-
 export default Backtest;

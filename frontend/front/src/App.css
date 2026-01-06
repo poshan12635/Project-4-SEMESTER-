@@ -1,5 +1,21 @@
-/* Force the container to ignore external navbar height if necessary */
-#root {
+/* App.css */
+:root {
+  --nav-height: 80px;
+  --bg-dark: #050505;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  color: white;
+  overflow: hidden; /* We handle scrolling inside the components */
   height: 100vh;
-  overflow: hidden;
+  width: 100vw;
+}
+
+#root {
+  height: 100%;
 }

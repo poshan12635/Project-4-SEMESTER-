@@ -5,7 +5,7 @@ import './App.css'
 import Navbar from './Navbar'
 import {BrowserRouter,Routes,Route} from 'react-router-dom'
 import Ai from "./Ai"
-import Home from './Home'
+import Homepage from './Homepage'
 import Backtest from './Backtest'
 
 function App() {
@@ -17,7 +17,7 @@ function App() {
     <Navbar/>
   
     <Routes>
-      <Route path='/' element={<Home/>}/>
+      <Route path='/' element={<Homepage/>}/>
       <Route path="/Ai" element={<Ai/>}/>
       <Route path="/Backtest" element={<Backtest/>}/>
     </Routes>

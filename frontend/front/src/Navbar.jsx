@@ -1,24 +1,21 @@
+// Navbar.jsx
 import React from "react";
-import './Navbar.css'
 import { Link } from "react-router-dom";
+import './Navbar.css';
 
-
-function Navbar(){
-    return(
-        <>
-        <nav className="nabar">
-            <ul className="list">
-                <li className="home"><Link>Home</Link></li>
-                <li className="Backtest"><Link to="/Backtest">BackTest</Link></li>
-                <li className="ai"><Link to="/Ai">Ai Hypothesis</Link></li>
-                <li className="portfolio"><a href="#">Portfolio Management</a></li>
-
-            </ul>
-
-        </nav>
-        
-        
-        </>
-    );
+function Navbar() {
+  return (
+    <nav className="firm-nav">
+      <div className="nav-left">
+        <Link to="/" className="firm-logo">QUANTIFYX<span>.</span></Link>
+        <div className="status-indicator"><span className="dot"></span> LIVE_FEED</div>
+      </div>
+      <ul className="nav-links">
+        <li><Link to="/">Home</Link></li>
+        <li><Link to="/Backtest">Backtest</Link></li>
+        <li><Link to="/Ai">AI Hypothesis</Link></li>
+      </ul>
+    </nav>
+  );
 }
-export default Navbar
+export default Navbar;
