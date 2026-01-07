@@ -12,6 +12,8 @@ import math
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
 from schema import BacktestRequest
+from Backtest import macrossover,MeanReversion
+
 
 
 
@@ -20,11 +22,18 @@ from schema import BacktestRequest
 
 app=FastAPI()
 
-app.add_middleware(CORSMiddleware,
-                   allow_origins=["http://localhost:5173"], 
-                   allow_credentials=True,
-                   allow_methods=["*"], 
-                   allow_headers=["*"],)
+origins = [
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,             
+    allow_credentials=True,
+    allow_methods=["*"],               
+    allow_headers=["*"],               
+)
 def get_db():
     db=Sessionlocal()
     try:
@@ -63,11 +72,11 @@ def get_hydro_data(sym:str,db:Session=Depends(get_db)):
     return df.to_dict(orient="records")
    
 
-
 def deep_sanitize(obj):
     if isinstance(obj, dict):
         return {k: deep_sanitize(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
+    
         return [deep_sanitize(i) for i in obj]
     elif isinstance(obj, (float, np.floating)):
         return float(obj) if math.isfinite(obj) else None
@@ -78,40 +87,93 @@ def deep_sanitize(obj):
     return obj
 
 @app.post("/bbband")
-def test_bollinger(data:BacktestRequest, db: Session = Depends(get_db)
-                   ):
-    symbol1 =data.sym.upper()
+def test_bollinger(data: BacktestRequest, db: Session = Depends(get_db)):
+    symbol1 = data.sym.upper()
+    
+
     query = text(
-        'SELECT "symbol","date","open","high","low","close","volume" '
+        'SELECT "date", "open", "high", "low", "close", "volume" '
         'FROM hydropower WHERE "symbol" = :symbol ORDER BY "date"'
     )
     result = db.execute(query, {"symbol": symbol1}).fetchall()
     
     if not result:
-        return {"status": "fail"}
+        return {"status": "fail", "message": "No data found for symbol"}
 
-    df = pd.DataFrame(result, columns=['Symbol','Date','Open','High','Low','Close','Volume'])
+    df = pd.DataFrame(result, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
     df['Date'] = pd.to_datetime(df['Date'])
     df.set_index('Date', inplace=True)
+    df[['Open', 'High', 'Low', 'Close', 'Volume']] = \
+    df[['Open', 'High', 'Low', 'Close', 'Volume']].astype(float)
     
-    for col in ['Close', 'Open', 'High', 'Low', 'Volume']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    inital_investment2 = data.investement
-    strategy_select=None
-    if data.stra=="Bollinger Band":
-        strategy_select=bollinger_band
-    bt = Backtest(df, strategy_select, cash=inital_investment2, commission=0)
-    stats = bt.run()
+    
 
-    raw_response = {
-        "ohlc": df.reset_index().to_dict(orient="records"),
-        "bb": {
-            "upper": stats._strategy.bb_upper.tolist(),
-            "middle": stats._strategy.middle.tolist(),
-            "lower": stats._strategy.lower.tolist()
-        },
-        "trades": stats._trades.to_dict(orient="records")
+    strategies = {
+        "Bollinger Band": bollinger_band,
+        "Moving Average Crossover": macrossover,
+        "Mean Reversion": MeanReversion
     }
+    
+    strategy_select = strategies.get(data.stra)
+    if not strategy_select:
+        return {"status": "fail", "message": "Invalid strategy selected"}
+
+    bt = Backtest(df, strategy_select, cash=data.investement, commission=0)
+    stats = bt.run()
+    trades_list = []
+    if '_trades' in stats and not stats['_trades'].empty:
+    
+             df_trades = stats['_trades'].copy()
+    
+
+             df_trades['EntryTime'] = df_trades['EntryTime'].dt.strftime('%Y-%m-%d')
+             df_trades['ExitTime'] = df_trades['ExitTime'].dt.strftime('%Y-%m-%d')
+    
+    
+             trades_list = df_trades.to_dict(orient='records')
+    
+    ohlc_data = []
+    for index, row in df.iterrows():
+        ohlc_data.append({
+            "time": index.strftime('%Y-%m-%d'),
+            "open": row['Open'],
+            "high": row['High'],
+            "low": row['Low'],
+            "close": row['Close'],
+        })
+
+    
+    raw_response = {
+        "summary": {
+            "Start Cash": data.investement,
+            "Final Equity": stats['Equity Final [$]'],
+            "Return [%]": stats['Return [%]'],
+            "Buy & Hold Return [%]": stats['Buy & Hold Return [%]'],
+            "Max Drawdown [%]": stats['Max. Drawdown [%]'],
+            "Total Trades": stats['# Trades'],
+            "Win Rate [%]": stats['Win Rate [%]'],
+            "Sharpe Ratio": float(stats['Sharpe Ratio']),
+        },
+        "ohlc": ohlc_data,
+        "trades": trades_list
+    }
+
+
+    if data.stra == "Bollinger Band":
+        raw_response["indicators"] = {
+            "upper": stats['_strategy'].bb_upper.tolist(),
+            "middle": stats['_strategy'].middle.tolist(),
+            "lower": stats['_strategy'].lower.tolist()
+        }
+    elif data.stra == "Ma crossover":
+        raw_response["indicators"] = {
+            "fast_ma": stats['_strategy'].fast.tolist(),
+            "slow_ma": stats['_strategy'].slow.tolist()
+        }
+    elif data.stra == "Mean Reversion":
+        raw_response["indicators"] = {
+            "zscore": stats['_strategy'].zscore.tolist()
+        }
 
     return jsonable_encoder(deep_sanitize(raw_response))
