@@ -2,6 +2,7 @@ from backtesting import Strategy
 import pandas as pd
 import numpy as np
 from ta.momentum import RSIIndicator
+from backtesting.lib import resample_apply
 
 def bbband(close, window=20, num_std=2):
     close = pd.Series(close)
@@ -26,6 +27,13 @@ def mean_reversion(close, window=20):
     std = close.rolling(window).std()
     z = (close - mean) / std
     return z.values
+
+
+def volume(volume,window=30):
+    volume=pd.Series(volume)
+    average_vol=volume.rolling(window).mean
+    return average_vol
+    
 
 class bollinger_band(Strategy):
     def init(self):
@@ -84,3 +92,39 @@ class BollingerRsi(Strategy):
             
             elif price < self.bband_middle[-1] and self.rsi[-1] > 50:
                  self.position.close()
+                 
+                 
+                 
+
+
+
+def SMA(values, n):
+
+    return pd.Series(values).rolling(n).mean()
+
+class VolumeBreakout(Strategy):
+    
+    vol_period = 20
+    entry_multiplier = 2.2
+    exit_multiplier = 0.85
+
+    def init(self):
+        
+        self.avg_vol = self.I(SMA, self.data.Volume, self.vol_period)
+        self.bband_upper,self.bband_middle,self.bband_lower=self.I(bbband,self.data.Close
+                                                                   )
+        
+    def next(self):
+    
+        current_vol = self.data.Volume[-1]
+        avg_vol_now = self.avg_vol[-1]
+        price = self.data.Close[-1]
+
+        
+        if price<=self.bband_lower and  current_vol > (self.exit_multiplier * avg_vol_now):
+            if not self.position:
+                self.buy(sl=0.95)
+                
+        
+        elif self.position and price>=self.bband_middle and current_vol < (self.entry_multiplier * avg_vol_now):
+            self.position.close()

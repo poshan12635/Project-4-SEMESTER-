@@ -12,7 +12,7 @@ import math
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
 from schema import BacktestRequest
-from Backtest import macrossover,MeanReversion,BollingerRsi
+from Backtest import macrossover,MeanReversion,BollingerRsi,VolumeBreakout
 
 
 
@@ -113,7 +113,8 @@ def test_bollinger(data: BacktestRequest, db: Session = Depends(get_db)):
         "Bollinger Band": bollinger_band,
         "Moving Average Crossover": macrossover,
         "Mean Reversion": MeanReversion,
-        "Bollinger+Rsi":BollingerRsi
+        "Bollinger+Rsi":BollingerRsi,
+        "VolumeBreakout":VolumeBreakout
     }
     
     strategy_select = strategies.get(data.stra)
@@ -182,6 +183,11 @@ def test_bollinger(data: BacktestRequest, db: Session = Depends(get_db)):
             "middle": stats['_strategy'].bband_middle.tolist(),
             "lower": stats['_strategy'].lower.tolist()
         }
+    elif data.stra == "VolumeBreakout":
+        raw_response["indicators"] = {
+            "average_vol":stats["_strategy"].avg_vol.tolist()
+        }
+
 
     return jsonable_encoder(deep_sanitize(raw_response))
 
